@@ -128,7 +128,7 @@ func init() {
 
 	// Define as variáveis de caminho usando o baseDir (MANTIDO PARA FLUXO C# LOCAL)
 	CREDENTIALS_FILE = filepath.Join(baseDir, "credentials.json")
-	pathToExe = filepath.Join(baseDir, "ConsultaNFeApp.exe")
+	pathToExe = filepath.Join(baseDir, "NfePorChaveGo")
 	outputDir = filepath.Join(baseDir, "nfes")
 	
 	// Garante que o diretório de saída (outputDir) exista
@@ -566,7 +566,7 @@ func main() {
 	// Configuração CORS (AGORA USA A VARIÁVEL frontendURL)
 	c := cors.New(cors.Options{
 		// Permite a URL do Netlify (frontendURL), localhost de desenvolvimento, e a URL do Render quando ele fizer health check.
-		AllowedOrigins:   []string{frontendURL, "https://back-end-nfe.onrender.com", "http://localhost:8080", "http://localhost:10000"},
+		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,
