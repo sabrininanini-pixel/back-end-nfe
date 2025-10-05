@@ -169,7 +169,7 @@ func initSheetsService() error {
 		if base64Creds != "" {
 			log.Println("Credenciais encontradas via variável de ambiente (Base64).")
             // Usamos RawURLEncoding, a tentativa mais robusta
-			credsBytes, err = base64.RawURLEncoding.DecodeString(base64Creds) 
+			credsBytes, err = base64.StdEncoding.DecodeString(base64Creds) 
 			if err != nil {
 				return fmt.Errorf("erro ao decodificar Base64: %w", err)
 			}
