@@ -128,7 +128,7 @@ func init() {
 
 	// Define as variáveis de caminho usando o baseDir (MANTIDO PARA FLUXO C# LOCAL)
 	CREDENTIALS_FILE = filepath.Join(baseDir, "credentials.json")
-	pathToExe = filepath.Join(baseDir, "ConsultaNFeApp.exe")
+	pathToExe = filepath.Join(baseDir, "NfePorChaveGo")
 	outputDir = filepath.Join(baseDir, "nfes")
 	
 	// Garante que o diretório de saída (outputDir) exista
