@@ -143,44 +143,35 @@ func init() {
 
 func initSheetsService() error {
 	ctx := context.Background()
-	var credsBytes []byte
-	var err error
-
-	// 1. PRIORIDADE ÚNICA: LER DA VARIÁVEL DE AMBIENTE BASE64 (MÉTODO SEGURO)
-	base64Creds := os.Getenv("CREDENTIALS_BASE64")
 	
-	if base64Creds == "" {
-		// Se a variável de ambiente não existir, retorna erro crítico.
-		return fmt.Errorf("credenciais de acesso ao Google Sheets não encontradas. A variável CREDENTIALS_BASE64 está vazia")
+	// 1. Prioridade Única: LER DA VARIÁVEL DE AMBIENTE COMO JSON PURA
+	// (Usando a nova variável GOOGLE_CREDENTIALS_JSON)
+	jsonCreds := os.Getenv("GOOGLE_CREDENTIALS_JSON")
+	
+	if jsonCreds == "" {
+		return fmt.Errorf("credenciais de acesso ao Google Sheets não encontradas. A variável GOOGLE_CREDENTIALS_JSON está vazia")
 	}
 
-	log.Println("Credenciais encontradas via variável de ambiente (Base64).")
+	log.Println("Credenciais encontradas via variável de ambiente (JSON pura).")
 
-	// 2. DECODIFICAÇÃO COM O MÉTODO PADRÃO (StdEncoding)
-	// Como a string Base64 foi gerada a partir de um JSON perfeito, esta é a decodificação correta.
-	// Se ela falhar, a string no Render está corrompida.
-	credsBytes, err = base64.StdEncoding.DecodeString(base64Creds)
-	
-	if err != nil {
-		return fmt.Errorf("erro fatal ao decodificar Base64 (Verifique a pureza da string no Render): %w", err)
-	}
+    // Garante a pureza máxima, removendo espaços e quebras de linha antes e depois da string.
+    jsonCreds = strings.TrimSpace(jsonCreds)
+    
+    // Convertemos a string lida diretamente para um slice de bytes
+	credsBytes := []byte(jsonCreds)
 
-    // --- LOG DE DEBUG CRÍTICO ---
-    // Logamos o JSON decodificado para inspecionar os primeiros bytes e diagnosticar
-    // o erro 'invalid character'
+    // DEBUG LOG (Para confirmar que o JSON está entrando correto)
     if len(credsBytes) > 100 {
-        log.Printf("DEBUG: JSON decodificado (primeiros 100 bytes): %s", string(credsBytes[:100]))
+        log.Printf("DEBUG: JSON de Credenciais (primeiros 100 bytes): %s", string(credsBytes[:100]))
     } else {
-        log.Printf("DEBUG: JSON decodificado (total bytes): %s", string(credsBytes))
+        log.Printf("DEBUG: JSON de Credenciais (total bytes): %s", string(credsBytes))
     }
 	
-    // 3. CONFIGURAR O SERVIÇO
-	// É aqui que o erro 'invalid character' acontece
+    // 2. CONFIGURAR O SERVIÇO - Usa os bytes JSON diretamente, eliminando o risco de decodificação Base64.
 	config, err := google.JWTConfigFromJSON(credsBytes, sheets.SpreadsheetsScope)
 	if err != nil {
-		// Se o erro for "invalid character 'g' in string escape code", significa que
-		// o JSON decodificado tem um '\g', indicando corrupção na private_key
-		return fmt.Errorf("erro ao criar config JWT: %w", err)
+		// Se falhar aqui, o problema é puramente no parser JSON, causado por caracteres invisíveis ou lixo no Render.
+		return fmt.Errorf("erro ao criar config JWT a partir do JSON puro: %w", err)
 	}
 
 	client := config.Client(ctx)
@@ -193,7 +184,6 @@ func initSheetsService() error {
 	sheetsService = srv
 	return nil
 }
-
 // --- Lógica de Negócios Principal (MANTIDAS) ---
 
 // parseXMLToRows (MANTIDA)
