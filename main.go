@@ -154,7 +154,7 @@ func initSheetsService() error {
 	base64Creds := os.Getenv("CREDENTIALS_BASE64")
 	if base64Creds != "" {
 		log.Println("Credenciais encontradas via variável de ambiente (Base64).")
-		credsBytes, err = base64.StdEncoding.DecodeString(base64Creds)
+		credsBytes, err = base64.URLEncoding.DecodeString(base64Creds)
 		if err != nil {
 			return fmt.Errorf("erro ao decodificar Base64: %w", err)
 		}
