@@ -140,7 +140,7 @@ func init() {
     frontendURL = os.Getenv("FRONTEND_URL") 
     if frontendURL == "" {
         // Valor padrão para desenvolvimento local ou ambiente desconhecido
-        frontendURL = "http://localhost:8080" 
+        frontendURL = "https://nfefront.netlify.app" 
     }
 }
 
@@ -566,7 +566,7 @@ func main() {
 	// Configuração CORS (AGORA USA A VARIÁVEL frontendURL)
 	c := cors.New(cors.Options{
 		// Permite a URL do Netlify (frontendURL), localhost de desenvolvimento, e a URL do Render quando ele fizer health check.
-		AllowedOrigins:   []string{frontendURL, "http://localhost:3000", "http://localhost:8080", "http://localhost:10000"},
+		AllowedOrigins:   []string{frontendURL, "https://back-end-nfe.onrender.com", "http://localhost:8080", "http://localhost:10000"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,
