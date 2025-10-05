@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/base64" // <-- NOVO: Adicionado para decodificar credenciais
+	"encoding/base64" // <-- Adicionado para decodificar credenciais
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -28,20 +28,20 @@ import (
 // NfeProc é a estrutura raiz que a maioria dos arquivos NF-e utiliza (XML de processo).
 type NFeProc struct {
 	XMLName xml.Name `xml:"nfeProc"`
-	NFe     NFe      `xml:"NFe"` // A NF-e real está aninhada aqui
+	NFe     NFe      `xml:"NFe"` // A NF-e real está aninhada aqui
 }
 
 // NFe simplificada para extração de dados relevantes.
 type NFe struct {
 	XMLName xml.Name `xml:"NFe"`
 	InfNFe struct {
-		ID    string `xml:"Id,attr"` // Chave da nota (usada para evitar duplicidade)
+		ID    string `xml:"Id,attr"` // Chave da nota (usada para evitar duplicidade)
 		Det []struct {
 			Prod struct {
 				CProd string `xml:"cProd"` // Código do Produto
-				CEAN  string `xml:"cEAN"`  // Código de Barras
+				CEAN  string `xml:"cEAN"`  // Código de Barras
 				XProd string `xml:"xProd"` // Descrição do Produto
-				QCom  string `xml:"qCom"`  // Quantidade Comercial
+				QCom  string `xml:"qCom"`  // Quantidade Comercial
 			} `xml:"prod"`
 			NItem string `xml:"nItem,attr"` // Número do Item na NF
 		} `xml:"det"`
@@ -51,7 +51,7 @@ type NFe struct {
 // ImportRequest é a estrutura para o JSON recebido do Frontend (importação XML por Arquivo).
 type ImportRequest struct {
 	XMLContent string `json:"xml_content"`
-	UserID     string `json:"user_id"`
+	UserID     string `json:"user_id"`
 }
 
 // ImportChaveRequest (Fluxo Chave)
@@ -62,7 +62,7 @@ type ImportChaveRequest struct {
 // ImportResponse é a estrutura para o JSON retornado ao Frontend (sucesso/erro importação).
 type ImportResponse struct {
 	Message string `json:"message"`
-	Error   string `json:"error,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // SheetFetchRequest define a estrutura para a requisição de busca de dados.
@@ -72,21 +72,21 @@ type SheetFetchRequest struct {
 
 // SheetFetchResponse define a estrutura para a resposta de busca de dados.
 type SheetFetchResponse struct {
-	Data  [][]interface{} `json:"data"`
-	Error string          `json:"error,omitempty"`
+	Data  [][]interface{} `json:"data"`
+	Error string          `json:"error,omitempty"`
 }
 
 // SheetUpdateRequest define a estrutura para a requisição de atualização de célula.
 type SheetUpdateRequest struct {
 	SheetName string `json:"sheet_name"`
-	Range     string `json:"range"` // Ex: "A2"
-	Value     string `json:"value"`
+	Range     string `json:"range"` // Ex: "A2"
+	Value     string `json:"value"`
 }
 
 // SheetClearRequest define a estrutura para a requisição de limpeza de dados.
 type SheetClearRequest struct {
 	SheetName string `json:"sheet_name"`
-	Range     string `json:"range"` // Ex: "A2:Z" - o range a ser limpo
+	Range     string `json:"range"` // Ex: "A2:Z" - o range a ser limpo
 }
 
 
@@ -99,7 +99,7 @@ var (
 	baseDir string
 
 	// *** MUDAR: ID da sua planilha Google Sheets ***
-	SPREADSHEET_ID    = "1x4a-gJyjHVxNKBy0bsuAE40vpt5Y9O9f5xEEF7W-fcE"
+	SPREADSHEET_ID    = "1x4a-gJyjHVxNKBy0bsuAE40vpt5Y9O9f5xEEF7W-fcE"
 	NOTA_FISCAL_SHEET = "NOTA FISCAL"
 
 	// O caminho para as credenciais é montado na função init()
@@ -111,7 +111,7 @@ var (
 )
 
 // Variável de Ambiente para CORS/Netlify (NOVA)
-var frontendURL string 
+var frontendURL string 
 
 // Serviço do Google Sheets global
 var sheetsService *sheets.Service
@@ -137,11 +137,11 @@ func init() {
 	}
 
 	// Lógica para obter a URL do frontend do ambiente (NOVA)
-    frontendURL = os.Getenv("FRONTEND_URL") 
-    if frontendURL == "" {
-        // Valor padrão para desenvolvimento local ou ambiente desconhecido
-        frontendURL = "https://nfefront.netlify.app" 
-    }
+    frontendURL = os.Getenv("FRONTEND_URL") 
+    if frontendURL == "" {
+        // Valor padrão para desenvolvimento local ou ambiente desconhecido
+        frontendURL = "https://nfefront.netlify.app" 
+    }
 }
 
 
@@ -149,28 +149,37 @@ func initSheetsService() error {
 	ctx := context.Background()
 	var credsBytes []byte
 	var err error
-	
-	// Tenta ler as credenciais da variável de ambiente Base64 (Prioridade 1: Produção - Render)
-	base64Creds := os.Getenv("CREDENTIALS_BASE64")
-	if base64Creds != "" {
-		log.Println("Credenciais encontradas via variável de ambiente (Base64).")
-		credsBytes, err = base64.RawURLEncoding.DecodeString(base64Creds) // ✅ CORREÇÃO OBRIGATÓRIA
-		if err != nil {
-			return fmt.Errorf("erro ao decodificar Base64: %w", err)
-		}
-	} else {
-		// Tenta ler do arquivo local (Prioridade 2: Desenvolvimento Local)
-		log.Printf("Tentando ler credenciais do arquivo local: %s", CREDENTIALS_FILE)
-		
-		if _, err := os.Stat(CREDENTIALS_FILE); os.IsNotExist(err) {
-			// Não conseguimos encontrar nem Base64 nem o arquivo. ERRO CRÍTICO.
-			return fmt.Errorf("credenciais de acesso ao Google Sheets não encontradas. Verifique credentials.json ou a variável CREDENTIALS_BASE64")
-		}
-		
+	var credsLoaded = false // Flag para saber se as credenciais foram carregadas
+
+	// 1. Tenta ler do arquivo local (Prioridade 1: Teste no Render com o arquivo no Git)
+	log.Printf("Tentando ler credenciais do arquivo local: %s", CREDENTIALS_FILE)
+
+	if _, err := os.Stat(CREDENTIALS_FILE); err == nil {
 		credsBytes, err = os.ReadFile(CREDENTIALS_FILE)
 		if err != nil {
 			return fmt.Errorf("erro ao ler credenciais do arquivo: %w", err)
 		}
+		log.Println("Credenciais encontradas via arquivo local (credentials.json).")
+		credsLoaded = true
+	}
+
+	// 2. Se o arquivo falhou, tenta ler da variável de ambiente Base64 (Prioridade 2)
+	if !credsLoaded {
+		base64Creds := os.Getenv("CREDENTIALS_BASE64")
+		if base64Creds != "" {
+			log.Println("Credenciais encontradas via variável de ambiente (Base64).")
+            // Usamos RawURLEncoding, a tentativa mais robusta
+			credsBytes, err = base64.RawURLEncoding.DecodeString(base64Creds) 
+			if err != nil {
+				return fmt.Errorf("erro ao decodificar Base64: %w", err)
+			}
+			credsLoaded = true
+		}
+	}
+
+	if !credsLoaded {
+		// Não conseguimos encontrar nem arquivo nem Base64. ERRO CRÍTICO.
+		return fmt.Errorf("credenciais de acesso ao Google Sheets não encontradas. Verifique credentials.json ou a variável CREDENTIALS_BASE64")
 	}
 
 	// Usa o slice de bytes lido/decodificado para configurar o serviço
@@ -231,9 +240,9 @@ func parseXMLToRows(xmlContent string) ([][]interface{}, string, error) {
 		// Formato: [Descrição, Quantidade, EAN, Item] (4 colunas)
 		row := []interface{}{
 			det.Prod.XProd, // Descrição (Coluna 1)
-			qCom,           // Quantidade (Coluna 2)
-			det.Prod.CEAN,  // Código de Barras (Coluna 3)
-			det.NItem,      // Item (Coluna 4)
+			qCom,           // Quantidade (Coluna 2)
+			det.Prod.CEAN,  // Código de Barras (Coluna 3)
+			det.NItem,      // Item (Coluna 4)
 		}
 		rows = append(rows, row)
 	}
@@ -566,9 +575,9 @@ func main() {
 	// Configuração CORS (AGORA USA A VARIÁVEL frontendURL)
 	c := cors.New(cors.Options{
 		// Permite a URL do Netlify (frontendURL), localhost de desenvolvimento, e a URL do Render quando ele fizer health check.
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,
 	})
 	r.Use(c.Handler)
