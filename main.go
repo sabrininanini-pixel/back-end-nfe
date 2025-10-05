@@ -22,7 +22,7 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
-// --- Estruturas de Dados (MANTIDAS) ---
+// --- Estruturas de Dados ---
 
 // NfeProc é a estrutura raiz que a maioria dos arquivos NF-e utiliza (XML de processo).
 type NFeProc struct {
@@ -92,9 +92,8 @@ type SheetClearRequest struct {
 // Variáveis de Estado Global (Simulação de DB)
 var importedChaves = make(map[string]bool)
 
-// Variáveis de Configuração (MODIFICADAS PARA SEGURANÇA)
+// Variáveis de Configuração
 var (
-	// *** Variável base para o diretório de execução ***
 	baseDir string
 
 	// *** MUDAR: ID da sua planilha Google Sheets ***
@@ -112,17 +111,15 @@ var frontendURL string
 // Serviço do Google Sheets global
 var sheetsService *sheets.Service
 
-// --- Inicialização e Configuração (MODIFICADAS PARA PRIORIDADE BASE64) ---
+// --- Inicialização e Configuração ---
 
 func init() {
-	// Obtém o diretório de trabalho atual.
 	var err error
 	baseDir, err = os.Getwd()
 	if err != nil {
 		log.Fatalf("Falha ao obter o diretório de trabalho: %v", err)
 	}
 
-	// Caminhos locais mantidos. CREDENTIALS_FILE é removido
 	pathToExe = filepath.Join(baseDir, "NfePorChaveGo")
 	outputDir = filepath.Join(baseDir, "nfes")
 	
@@ -134,17 +131,16 @@ func init() {
 	// Lógica para obter a URL do frontend do ambiente
     frontendURL = os.Getenv("FRONTEND_URL")
     if frontendURL == "" {
-        // Valor padrão para desenvolvimento local ou ambiente desconhecido
         frontendURL = "https://nfefront.netlify.app"
     }
 }
 
 
+// NOVO MÉTODO DE CREDENCIAIS (JSON PURA)
 func initSheetsService() error {
 	ctx := context.Background()
 	
 	// 1. Prioridade Única: LER DA VARIÁVEL DE AMBIENTE COMO JSON PURA
-	// (Usando a nova variável GOOGLE_CREDENTIALS_JSON)
 	jsonCreds := os.Getenv("GOOGLE_CREDENTIALS_JSON")
 	
 	if jsonCreds == "" {
@@ -166,10 +162,9 @@ func initSheetsService() error {
         log.Printf("DEBUG: JSON de Credenciais (total bytes): %s", string(credsBytes))
     }
 	
-    // 2. CONFIGURAR O SERVIÇO - Usa os bytes JSON diretamente, eliminando o risco de decodificação Base64.
+    // 2. CONFIGURAR O SERVIÇO
 	config, err := google.JWTConfigFromJSON(credsBytes, sheets.SpreadsheetsScope)
 	if err != nil {
-		// Se falhar aqui, o problema é puramente no parser JSON, causado por caracteres invisíveis ou lixo no Render.
 		return fmt.Errorf("erro ao criar config JWT a partir do JSON puro: %w", err)
 	}
 
@@ -183,7 +178,8 @@ func initSheetsService() error {
 	sheetsService = srv
 	return nil
 }
-// --- Lógica de Negócios Principal (MANTIDAS) ---
+
+// --- Lógica de Negócios Principal ---
 
 // parseXMLToRows (MANTIDA)
 func parseXMLToRows(xmlContent string) ([][]interface{}, string, error) {
@@ -207,7 +203,6 @@ func parseXMLToRows(xmlContent string) ([][]interface{}, string, error) {
 	var rows [][]interface{}
 
 	// A Linha de Cabeçalho da NF (para agrupar as informações)
-	// Formato: [Chave, "", "", ""] (4 colunas)
 	notaHeader := []interface{}{fmt.Sprintf("NF Chave: %s", chaveNFe), "", "", ""}
 	rows = append(rows, notaHeader)
 
@@ -220,7 +215,6 @@ func parseXMLToRows(xmlContent string) ([][]interface{}, string, error) {
 		}
 
 		// Linhas de Detalhe do Produto
-		// Formato: [Descrição, Quantidade, EAN, Item] (4 colunas)
 		row := []interface{}{
 			det.Prod.XProd, // Descrição (Coluna 1)
 			qCom,           // Quantidade (Coluna 2)
@@ -233,32 +227,32 @@ func parseXMLToRows(xmlContent string) ([][]interface{}, string, error) {
 	return rows, chaveNFe, nil
 }
 
-// buscarXMLPorChave (MANTIDA)
-func buscarXMLPorChave(chave string) ([]byte, error) {
+// buscarXMLPorChave - AGORA RETORNA TAMBÉM O CAMINHO DO ARQUIVO
+func buscarXMLPorChave(chave string) ([]byte, string, error) {
 	log.Printf("Iniciando execução externa: %s %s", pathToExe, chave)
 
-	// O executável C#.NET é chamado aqui
 	cmd := exec.Command(pathToExe, chave)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
 		log.Printf("Erro na execução do C#.NET: %v. Saída: %s", err, string(output))
-		return nil, fmt.Errorf("falha ao executar o programa de consulta: %v. Saída: %s", err, string(output))
+		return nil, "", fmt.Errorf("falha ao executar o programa de consulta: %v. Saída: %s", err, string(output))
 	}
 
 	log.Printf("Execução do C#.NET concluída. Saída (DEBUG):\n%s", string(output))
 
-	// O C#.NET DEVE estar salvando o arquivo dentro do diretório 'outputDir' (que é 'nfe')
 	xmlFileName := fmt.Sprintf("NFe_%s.xml", chave)
 	xmlFilePath := filepath.Join(outputDir, xmlFileName)
 
 	xmlData, err := os.ReadFile(xmlFilePath)
 	if err != nil {
 		log.Printf("Erro ao ler o arquivo XML em %s: %v", xmlFilePath, err)
-		return nil, fmt.Errorf("o C#.NET não gerou o arquivo XML. Possível motivo: NFe não autorizada ou inexistente.")
+        // Retornamos o xmlFilePath para que, mesmo que a leitura falhe, ele possa ser deletado
+		return nil, xmlFilePath, fmt.Errorf("o C#.NET não gerou o arquivo XML. Possível motivo: NFe não autorizada ou inexistente.")
 	}
 
-	return xmlData, nil
+    // Retorna os dados do XML, o caminho do arquivo e nil para erro.
+	return xmlData, xmlFilePath, nil
 }
 
 // appendDataToSheet (MANTIDA)
@@ -294,7 +288,6 @@ func clearSheetData(ctx context.Context, sheetName, rangeToClear string) error {
 	// Constrói o range completo (Ex: "NOTA FISCAL!A2:Z")
 	fullRange := fmt.Sprintf("%s!%s", sheetName, rangeToClear)
 
-	// NOTA: Usa-se A2 para manter a linha de cabeçalho (A1)
 	_, err := sheetsService.Spreadsheets.Values.Clear(
 		SPREADSHEET_ID,
 		fullRange,
@@ -309,7 +302,7 @@ func clearSheetData(ctx context.Context, sheetName, rangeToClear string) error {
 }
 
 
-// --- Handlers HTTP (MANTIDOS) ---
+// --- Handlers HTTP ---
 
 // handleImportXML (MANTIDO)
 func handleImportXML(w http.ResponseWriter, r *http.Request) {
@@ -353,7 +346,7 @@ func handleImportXML(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// importarXMLHandler (MANTIDO)
+// importarXMLHandler - MODIFICADO PARA DELETAR O ARQUIVO APÓS O USO
 func importarXMLHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
@@ -370,17 +363,27 @@ func importarXMLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	chaveAcesso := req.ChaveAcesso
-	// Definimos o contexto com timeout.
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	// PASSO 1: OBTÉM o XML do C#.NET
-	xmlData, err := buscarXMLPorChave(chaveAcesso)
+	// PASSO 1: OBTÉM o XML e o Caminho do Arquivo
+	// Note que a função agora retorna 3 valores, incluindo o caminho.
+	xmlData, xmlFilePath, err := buscarXMLPorChave(chaveAcesso)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ImportResponse{Error: fmt.Sprintf("Erro na busca do XML: %v", err)})
 		return
 	}
+
+    // CRÍTICO: Deleta o arquivo após o processamento, garantido pelo 'defer'
+    // Isso é executado mesmo que o parsing ou o sheets falhe (logo abaixo).
+    defer func() {
+        if rErr := os.Remove(xmlFilePath); rErr != nil {
+            log.Printf("Aviso: Falha ao remover arquivo XML temporário %s: %v", xmlFilePath, rErr)
+        } else {
+             log.Printf("DEBUG: Arquivo XML temporário %s removido com sucesso.", xmlFilePath)
+        }
+    }()
 
 	// PASSO 2: USA A MESMA LÓGICA DO ARQUIVO XML para extrair dados detalhados.
 	xmlContent := string(xmlData)
@@ -528,7 +531,7 @@ func handleClearSheetData(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// --- Inicialização do Servidor (MANTIDA) ---
+// --- Inicialização do Servidor ---
 
 func main() {
 	// 1. Inicializa o serviço do Google Sheets
@@ -562,7 +565,7 @@ func main() {
 
     r.Use(middleware.Recoverer)
 
-	// 3. Rotas da Aplicação (MANTIDAS)
+	// 3. Rotas da Aplicação
 	r.Post("/import-xml-data", handleImportXML)
 	r.Post("/importar-xml-chave", importarXMLHandler)
 	r.Post("/fetch-sheet-data", handleFetchSheetData)
