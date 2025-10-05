@@ -572,13 +572,16 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Configuração CORS (AGORA USA A VARIÁVEL frontendURL)
+	// Configuração CORS (CORRIGIDA: Usando URL explícita)
+	// A variável frontendURL está sendo lida corretamente na função init()
 	c := cors.New(cors.Options{
-		// Permite a URL do Netlify (frontendURL), localhost de desenvolvimento, e a URL do Render quando ele fizer health check.
-		AllowedOrigins:   []string{"*"},
+		// ✅ CORREÇÃO: Remove o wildcard "*" e usa a URL explícita.
+		// Adicione a própria URL do Render como backup para health checks e chamadas internas.
+		AllowedOrigins:   []string{frontendURL, "https://back-end-nfe.onrender.com"},
+		
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		AllowCredentials: true,
+		AllowCredentials: true, // Agora funciona, pois as Origens são explícitas
 	})
 	r.Use(c.Handler)
 
