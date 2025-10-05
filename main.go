@@ -578,7 +578,9 @@ func main() {
 	// A variável frontendURL está sendo lida corretamente na função init()
 	c := cors.New(cors.Options{
 		// Usamos as URLs explícitas para resolver o conflito de segurança com AllowCredentials: true
-		AllowedOrigins:   []string{frontendURL, "https://back-end-nfe.onrender.com"},
+		AllowedOrigins:   []string{frontendURL, "https://nfefront.netlify.app",
+    "https://nfefront.netlify.app/",
+    "https://back-end-nfe.onrender.com",},
 		
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
