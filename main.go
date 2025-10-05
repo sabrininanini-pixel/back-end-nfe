@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/base64" // <-- Adicionado para decodificar credenciais
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -93,7 +93,7 @@ type SheetClearRequest struct {
 // Variáveis de Estado Global (Simulação de DB)
 var importedChaves = make(map[string]bool)
 
-// Variáveis de Configuração (MANTIDAS)
+// Variáveis de Configuração (MODIFICADAS PARA SEGURANÇA)
 var (
 	// *** Variável base para o diretório de execução ***
 	baseDir string
@@ -102,21 +102,18 @@ var (
 	SPREADSHEET_ID    = "1x4a-gJyjHVxNKBy0bsuAE40vpt5Y9O9f5xEEF7W-fcE"
 	NOTA_FISCAL_SHEET = "NOTA FISCAL"
 
-	// O caminho para as credenciais é montado na função init()
-	CREDENTIALS_FILE string
-	// O caminho para o executável C#.NET é montado na função init()
+	// Caminhos locais mantidos apenas para o executável C#.NET
 	pathToExe string
-	// O diretório de saída dos XMLs é montado na função init()
 	outputDir string
 )
 
-// Variável de Ambiente para CORS/Netlify (NOVA)
-var frontendURL string 
+// Variável de Ambiente para CORS/Netlify
+var frontendURL string
 
 // Serviço do Google Sheets global
 var sheetsService *sheets.Service
 
-// --- Inicialização e Configuração (MODIFICADAS) ---
+// --- Inicialização e Configuração (MODIFICADAS PARA PRIORIDADE BASE64) ---
 
 func init() {
 	// Obtém o diretório de trabalho atual.
@@ -126,13 +123,7 @@ func init() {
 		log.Fatalf("Falha ao obter o diretório de trabalho: %v", err)
 	}
 
-	// Define as variáveis de caminho usando o baseDir (MANTIDO PARA FLUXO C# LOCAL)
-	// *** REMOVA OU COMENTE ESTA LINHA:
-	// CREDENTIALS_FILE = filepath.Join(baseDir, "credentials.json")
-	
-	// *** ADICIONE ESTA LINHA (Caminho Relativo Simplificado):
-	CREDENTIALS_FILE = "credentials.json"
-    
+	// Caminhos locais mantidos. CREDENTIALS_FILE é removido
 	pathToExe = filepath.Join(baseDir, "NfePorChaveGo")
 	outputDir = filepath.Join(baseDir, "nfes")
 	
@@ -141,11 +132,11 @@ func init() {
 		log.Fatalf("Falha ao criar o diretório de saída (%s): %v", outputDir, err)
 	}
 
-	// Lógica para obter a URL do frontend do ambiente (NOVA)
-    frontendURL = os.Getenv("FRONTEND_URL") 
+	// Lógica para obter a URL do frontend do ambiente
+    frontendURL = os.Getenv("FRONTEND_URL")
     if frontendURL == "" {
         // Valor padrão para desenvolvimento local ou ambiente desconhecido
-        frontendURL = "https://nfefront.netlify.app" 
+        frontendURL = "https://nfefront.netlify.app"
     }
 }
 
@@ -154,42 +145,41 @@ func initSheetsService() error {
 	ctx := context.Background()
 	var credsBytes []byte
 	var err error
-	var credsLoaded = false // Flag para saber se as credenciais foram carregadas
 
-	// 1. Tenta ler do arquivo local (Prioridade 1: Teste no Render com o arquivo no Git)
-	log.Printf("Tentando ler credenciais do arquivo local: %s", CREDENTIALS_FILE)
-
-	if _, err := os.Stat(CREDENTIALS_FILE); err == nil {
-		credsBytes, err = os.ReadFile(CREDENTIALS_FILE)
-		if err != nil {
-			return fmt.Errorf("erro ao ler credenciais do arquivo: %w", err)
-		}
-		log.Println("Credenciais encontradas via arquivo local (credentials.json).")
-		credsLoaded = true
+	// 1. PRIORIDADE ÚNICA: LER DA VARIÁVEL DE AMBIENTE BASE64 (MÉTODO SEGURO)
+	base64Creds := os.Getenv("CREDENTIALS_BASE64")
+	
+	if base64Creds == "" {
+		// Se a variável de ambiente não existir, retorna erro crítico.
+		return fmt.Errorf("credenciais de acesso ao Google Sheets não encontradas. A variável CREDENTIALS_BASE64 está vazia")
 	}
 
-	// 2. Se o arquivo falhou, tenta ler da variável de ambiente Base64 (Prioridade 2)
-	if !credsLoaded {
-		base64Creds := os.Getenv("CREDENTIALS_BASE64")
-		if base64Creds != "" {
-			log.Println("Credenciais encontradas via variável de ambiente (Base64).")
-            // Usamos RawURLEncoding, a tentativa mais robusta
-			credsBytes, err = base64.RawStdEncoding.DecodeString(base64Creds) 
-			if err != nil {
-				return fmt.Errorf("erro ao decodificar Base64: %w", err)
-			}
-			credsLoaded = true
-		}
+	log.Println("Credenciais encontradas via variável de ambiente (Base64).")
+
+	// 2. DECODIFICAÇÃO COM O MÉTODO PADRÃO (StdEncoding)
+	// Como a string Base64 foi gerada a partir de um JSON perfeito, esta é a decodificação correta.
+	// Se ela falhar, a string no Render está corrompida.
+	credsBytes, err = base64.StdEncoding.DecodeString(base64Creds)
+	
+	if err != nil {
+		return fmt.Errorf("erro fatal ao decodificar Base64 (Verifique a pureza da string no Render): %w", err)
 	}
 
-	if !credsLoaded {
-		// Não conseguimos encontrar nem arquivo nem Base64. ERRO CRÍTICO.
-		return fmt.Errorf("credenciais de acesso ao Google Sheets não encontradas. Verifique credentials.json ou a variável CREDENTIALS_BASE64")
-	}
-
-	// Usa o slice de bytes lido/decodificado para configurar o serviço
+    // --- LOG DE DEBUG CRÍTICO ---
+    // Logamos o JSON decodificado para inspecionar os primeiros bytes e diagnosticar
+    // o erro 'invalid character'
+    if len(credsBytes) > 100 {
+        log.Printf("DEBUG: JSON decodificado (primeiros 100 bytes): %s", string(credsBytes[:100]))
+    } else {
+        log.Printf("DEBUG: JSON decodificado (total bytes): %s", string(credsBytes))
+    }
+	
+    // 3. CONFIGURAR O SERVIÇO
+	// É aqui que o erro 'invalid character' acontece
 	config, err := google.JWTConfigFromJSON(credsBytes, sheets.SpreadsheetsScope)
 	if err != nil {
+		// Se o erro for "invalid character 'g' in string escape code", significa que
+		// o JSON decodificado tem um '\g', indicando corrupção na private_key
 		return fmt.Errorf("erro ao criar config JWT: %w", err)
 	}
 
@@ -208,7 +198,6 @@ func initSheetsService() error {
 
 // parseXMLToRows (MANTIDA)
 func parseXMLToRows(xmlContent string) ([][]interface{}, string, error) {
-	// ... (código mantido) ...
 	var nfeProc NFeProc
 	if err := xml.Unmarshal([]byte(xmlContent), &nfeProc); err != nil {
 		log.Printf("Erro de XML Unmarshal: %v", err)
@@ -285,7 +274,6 @@ func buscarXMLPorChave(chave string) ([]byte, error) {
 
 // appendDataToSheet (MANTIDA)
 func appendDataToSheet(ctx context.Context, rows [][]interface{}) error {
-	// ... (código mantido) ...
 	if sheetsService == nil {
 		return fmt.Errorf("serviço do Google Sheets não inicializado")
 	}
@@ -310,7 +298,6 @@ func appendDataToSheet(ctx context.Context, rows [][]interface{}) error {
 
 // clearSheetData (MANTIDA)
 func clearSheetData(ctx context.Context, sheetName, rangeToClear string) error {
-	// ... (código mantido) ...
 	if sheetsService == nil {
 		return fmt.Errorf("serviço do Google Sheets não inicializado")
 	}
@@ -337,7 +324,6 @@ func clearSheetData(ctx context.Context, sheetName, rangeToClear string) error {
 
 // handleImportXML (MANTIDO)
 func handleImportXML(w http.ResponseWriter, r *http.Request) {
-	// ... (código mantido) ...
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
@@ -380,7 +366,6 @@ func handleImportXML(w http.ResponseWriter, r *http.Request) {
 
 // importarXMLHandler (MANTIDO)
 func importarXMLHandler(w http.ResponseWriter, r *http.Request) {
-	// ... (código mantido) ...
 	if r.Method != http.MethodPost {
 		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
 		return
@@ -441,7 +426,6 @@ func importarXMLHandler(w http.ResponseWriter, r *http.Request) {
 
 // handleFetchSheetData (MANTIDO)
 func handleFetchSheetData(w http.ResponseWriter, r *http.Request) {
-	// ... (código mantido) ...
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
@@ -475,7 +459,6 @@ func handleFetchSheetData(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateSheetData (MANTIDO)
 func handleUpdateSheetData(w http.ResponseWriter, r *http.Request) {
-	// ... (código mantido) ...
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
@@ -521,7 +504,6 @@ func handleUpdateSheetData(w http.ResponseWriter, r *http.Request) {
 
 // handleClearSheetData (MANTIDO)
 func handleClearSheetData(w http.ResponseWriter, r *http.Request) {
-	// ... (código mantido) ...
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
@@ -557,7 +539,7 @@ func handleClearSheetData(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// --- Inicialização do Servidor (MODIFICADA) ---
+// --- Inicialização do Servidor (MANTIDA) ---
 
 func main() {
 	// 1. Inicializa o serviço do Google Sheets
@@ -565,7 +547,6 @@ func main() {
 		log.Fatalf("Falha na inicialização do serviço Sheets: %v", err)
 	}
 	log.Println("Serviço do Google Sheets inicializado com sucesso.")
-	log.Printf("Caminho das Credenciais (Local): %s", CREDENTIALS_FILE)
 	log.Printf("Caminho do Executável (Local): %s", pathToExe)
 	log.Printf("Diretório de Saída XML (Local): %s", outputDir)
 
@@ -574,13 +555,9 @@ func main() {
 	r := chi.NewRouter()
 
 	// Middlewares
-	// ✅ CORREÇÃO: Colocamos o CORS antes do Recoverer para garantir a resposta OPTIONS
-	//              não seja interrompida sem o header correto.
-	
 	r.Use(middleware.Logger)
 	
 	// Configuração CORS (PRIORIDADE ALTA)
-	// A variável frontendURL está sendo lida corretamente na função init()
 	c := cors.New(cors.Options{
 		// Usamos as URLs explícitas para resolver o conflito de segurança com AllowCredentials: true
 		AllowedOrigins:   []string{frontendURL, "https://nfefront.netlify.app",
@@ -594,7 +571,7 @@ func main() {
 	})
 	r.Use(c.Handler)
 
-    r.Use(middleware.Recoverer) // Colocado depois do CORS
+    r.Use(middleware.Recoverer)
 
 	// 3. Rotas da Aplicação (MANTIDAS)
 	r.Post("/import-xml-data", handleImportXML)
@@ -603,7 +580,7 @@ func main() {
 	r.Post("/update-sheet-data", handleUpdateSheetData)
 	r.Post("/clear-sheet-data", handleClearSheetData)
 
-	// 4. Inicia o servidor na porta dinâmica (NOVO: LÊ DO AMBIENTE)
+	// 4. Inicia o servidor na porta dinâmica (LÊ DO AMBIENTE)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "10000" // Porta padrão para o Render Free Tier
