@@ -1,0 +1,5 @@
+# Arquivos de credenciais (SECRETO - NAO ENVIAR PARA O GITHUB)
+credentials.json
+
+# Arquivos de executáveis, temporários e de sistema
+*.exe
