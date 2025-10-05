@@ -127,7 +127,12 @@ func init() {
 	}
 
 	// Define as variáveis de caminho usando o baseDir (MANTIDO PARA FLUXO C# LOCAL)
-	CREDENTIALS_FILE = filepath.Join(baseDir, "credentials.json")
+	// *** REMOVA OU COMENTE ESTA LINHA:
+	// CREDENTIALS_FILE = filepath.Join(baseDir, "credentials.json")
+	
+	// *** ADICIONE ESTA LINHA (Caminho Relativo Simplificado):
+	CREDENTIALS_FILE = "credentials.json"
+    
 	pathToExe = filepath.Join(baseDir, "NfePorChaveGo")
 	outputDir = filepath.Join(baseDir, "nfes")
 	
