@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64" // <-- NOVO: Adicionado para decodificar credenciais
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -22,7 +23,7 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
-// --- Estruturas de Dados ---
+// --- Estruturas de Dados (MANTIDAS) ---
 
 // NfeProc é a estrutura raiz que a maioria dos arquivos NF-e utiliza (XML de processo).
 type NFeProc struct {
@@ -92,7 +93,7 @@ type SheetClearRequest struct {
 // Variáveis de Estado Global (Simulação de DB)
 var importedChaves = make(map[string]bool)
 
-// Variáveis de Configuração (AGORA USANDO VAR)
+// Variáveis de Configuração (MANTIDAS)
 var (
 	// *** Variável base para o diretório de execução ***
 	baseDir string
@@ -109,10 +110,13 @@ var (
 	outputDir string
 )
 
+// Variável de Ambiente para CORS/Netlify (NOVA)
+var frontendURL string 
+
 // Serviço do Google Sheets global
 var sheetsService *sheets.Service
 
-// --- Inicialização e Configuração ---
+// --- Inicialização e Configuração (MODIFICADAS) ---
 
 func init() {
 	// Obtém o diretório de trabalho atual.
@@ -122,7 +126,7 @@ func init() {
 		log.Fatalf("Falha ao obter o diretório de trabalho: %v", err)
 	}
 
-	// Define as variáveis de caminho usando o baseDir
+	// Define as variáveis de caminho usando o baseDir (MANTIDO PARA FLUXO C# LOCAL)
 	CREDENTIALS_FILE = filepath.Join(baseDir, "credentials.json")
 	pathToExe = filepath.Join(baseDir, "ConsultaNFeApp.exe")
 	outputDir = filepath.Join(baseDir, "nfes")
@@ -131,23 +135,46 @@ func init() {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		log.Fatalf("Falha ao criar o diretório de saída (%s): %v", outputDir, err)
 	}
+
+	// Lógica para obter a URL do frontend do ambiente (NOVA)
+    frontendURL = os.Getenv("FRONTEND_URL") 
+    if frontendURL == "" {
+        // Valor padrão para desenvolvimento local ou ambiente desconhecido
+        frontendURL = "http://localhost:8080" 
+    }
 }
 
 
 func initSheetsService() error {
 	ctx := context.Background()
-
-	// Verifica se o arquivo de credenciais existe antes de tentar ler
-	if _, err := os.Stat(CREDENTIALS_FILE); os.IsNotExist(err) {
-		return fmt.Errorf("arquivo de credenciais não encontrado no caminho: %s", CREDENTIALS_FILE)
+	var credsBytes []byte
+	var err error
+	
+	// Tenta ler as credenciais da variável de ambiente Base64 (Prioridade 1: Produção - Render)
+	base64Creds := os.Getenv("CREDENTIALS_BASE64")
+	if base64Creds != "" {
+		log.Println("Credenciais encontradas via variável de ambiente (Base64).")
+		credsBytes, err = base64.StdEncoding.DecodeString(base64Creds)
+		if err != nil {
+			return fmt.Errorf("erro ao decodificar Base64: %w", err)
+		}
+	} else {
+		// Tenta ler do arquivo local (Prioridade 2: Desenvolvimento Local)
+		log.Printf("Tentando ler credenciais do arquivo local: %s", CREDENTIALS_FILE)
+		
+		if _, err := os.Stat(CREDENTIALS_FILE); os.IsNotExist(err) {
+			// Não conseguimos encontrar nem Base64 nem o arquivo. ERRO CRÍTICO.
+			return fmt.Errorf("credenciais de acesso ao Google Sheets não encontradas. Verifique credentials.json ou a variável CREDENTIALS_BASE64")
+		}
+		
+		credsBytes, err = os.ReadFile(CREDENTIALS_FILE)
+		if err != nil {
+			return fmt.Errorf("erro ao ler credenciais do arquivo: %w", err)
+		}
 	}
 
-	b, err := os.ReadFile(CREDENTIALS_FILE)
-	if err != nil {
-		return fmt.Errorf("erro ao ler credenciais: %w", err)
-	}
-
-	config, err := google.JWTConfigFromJSON(b, sheets.SpreadsheetsScope)
+	// Usa o slice de bytes lido/decodificado para configurar o serviço
+	config, err := google.JWTConfigFromJSON(credsBytes, sheets.SpreadsheetsScope)
 	if err != nil {
 		return fmt.Errorf("erro ao criar config JWT: %w", err)
 	}
@@ -163,10 +190,11 @@ func initSheetsService() error {
 	return nil
 }
 
-// --- Lógica de Negócios Principal (Importação e Atualização) ---
+// --- Lógica de Negócios Principal (MANTIDAS) ---
 
-// parseXMLToRows extrai os dados do XML e formata para inserção no Sheets (Usado por Fluxo Arquivo e Fluxo Chave).
+// parseXMLToRows (MANTIDA)
 func parseXMLToRows(xmlContent string) ([][]interface{}, string, error) {
+	// ... (código mantido) ...
 	var nfeProc NFeProc
 	if err := xml.Unmarshal([]byte(xmlContent), &nfeProc); err != nil {
 		log.Printf("Erro de XML Unmarshal: %v", err)
@@ -213,7 +241,7 @@ func parseXMLToRows(xmlContent string) ([][]interface{}, string, error) {
 	return rows, chaveNFe, nil
 }
 
-// buscarXMLPorChave: Executa o C#.NET, obtém o XML salvo e retorna o conteúdo.
+// buscarXMLPorChave (MANTIDA)
 func buscarXMLPorChave(chave string) ([]byte, error) {
 	log.Printf("Iniciando execução externa: %s %s", pathToExe, chave)
 
@@ -241,8 +269,9 @@ func buscarXMLPorChave(chave string) ([]byte, error) {
 	return xmlData, nil
 }
 
-// appendDataToSheet insere as linhas no Google Sheets.
+// appendDataToSheet (MANTIDA)
 func appendDataToSheet(ctx context.Context, rows [][]interface{}) error {
+	// ... (código mantido) ...
 	if sheetsService == nil {
 		return fmt.Errorf("serviço do Google Sheets não inicializado")
 	}
@@ -265,8 +294,9 @@ func appendDataToSheet(ctx context.Context, rows [][]interface{}) error {
 	return nil
 }
 
-// clearSheetData remove o conteúdo de um range específico no Google Sheets (values.clear).
+// clearSheetData (MANTIDA)
 func clearSheetData(ctx context.Context, sheetName, rangeToClear string) error {
+	// ... (código mantido) ...
 	if sheetsService == nil {
 		return fmt.Errorf("serviço do Google Sheets não inicializado")
 	}
@@ -289,10 +319,11 @@ func clearSheetData(ctx context.Context, sheetName, rangeToClear string) error {
 }
 
 
-// --- Handlers HTTP ---
+// --- Handlers HTTP (MANTIDOS) ---
 
-// handleImportXML é o handler principal para a requisição de importação de ARQUIVO XML.
+// handleImportXML (MANTIDO)
 func handleImportXML(w http.ResponseWriter, r *http.Request) {
+	// ... (código mantido) ...
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
@@ -333,8 +364,9 @@ func handleImportXML(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// importarXMLHandler coordena a importação completa por CHAVE DE ACESSO.
+// importarXMLHandler (MANTIDO)
 func importarXMLHandler(w http.ResponseWriter, r *http.Request) {
+	// ... (código mantido) ...
 	if r.Method != http.MethodPost {
 		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
 		return
@@ -393,8 +425,9 @@ func importarXMLHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// handleFetchSheetData busca dados de uma aba específica no Google Sheets.
+// handleFetchSheetData (MANTIDO)
 func handleFetchSheetData(w http.ResponseWriter, r *http.Request) {
+	// ... (código mantido) ...
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
@@ -426,8 +459,9 @@ func handleFetchSheetData(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleUpdateSheetData atualiza o valor de uma célula específica no Google Sheets.
+// handleUpdateSheetData (MANTIDO)
 func handleUpdateSheetData(w http.ResponseWriter, r *http.Request) {
+	// ... (código mantido) ...
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
@@ -471,8 +505,9 @@ func handleUpdateSheetData(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleClearSheetData é o handler para limpar dados de uma aba.
+// handleClearSheetData (MANTIDO)
 func handleClearSheetData(w http.ResponseWriter, r *http.Request) {
+	// ... (código mantido) ...
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
@@ -508,7 +543,7 @@ func handleClearSheetData(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// --- Inicialização do Servidor ---
+// --- Inicialização do Servidor (MODIFICADA) ---
 
 func main() {
 	// 1. Inicializa o serviço do Google Sheets
@@ -516,9 +551,9 @@ func main() {
 		log.Fatalf("Falha na inicialização do serviço Sheets: %v", err)
 	}
 	log.Println("Serviço do Google Sheets inicializado com sucesso.")
-	log.Printf("Caminho das Credenciais (Relativo): %s", CREDENTIALS_FILE)
-	log.Printf("Caminho do Executável (Relativo): %s", pathToExe)
-	log.Printf("Diretório de Saída XML (Relativo): %s", outputDir)
+	log.Printf("Caminho das Credenciais (Local): %s", CREDENTIALS_FILE)
+	log.Printf("Caminho do Executável (Local): %s", pathToExe)
+	log.Printf("Diretório de Saída XML (Local): %s", outputDir)
 
 
 	// 2. Configura o roteador HTTP
@@ -528,42 +563,31 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Configuração CORS
+	// Configuração CORS (AGORA USA A VARIÁVEL frontendURL)
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		// Permite a URL do Netlify (frontendURL), localhost de desenvolvimento, e a URL do Render quando ele fizer health check.
+		AllowedOrigins:   []string{frontendURL, "http://localhost:3000", "http://localhost:8080", "http://localhost:10000"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,
 	})
 	r.Use(c.Handler)
 
-	// 3. Rotas da Aplicação
-
-	// Rota da API de Importação XML (Arquivo)
+	// 3. Rotas da Aplicação (MANTIDAS)
 	r.Post("/import-xml-data", handleImportXML)
-
-	// Rota da API de Importação XML (Chave de Acesso - FLUXO DIRETO)
 	r.Post("/importar-xml-chave", importarXMLHandler)
-
-	// Rota da API de Busca de Dados da Planilha
 	r.Post("/fetch-sheet-data", handleFetchSheetData)
-
-	// Rota da API de Atualização de Célula (Para Contagem Loja)
 	r.Post("/update-sheet-data", handleUpdateSheetData)
-
-	// Rota da API de Limpeza de Dados
 	r.Post("/clear-sheet-data", handleClearSheetData)
 
-	// Rota do Frontend (Servir o index.html na raiz)
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		http.ServeFile(w, r, "index.html")
-	})
-
-
-	// 4. Inicia o servidor na porta 8080
-	log.Println("Servidor Go rodando em http://localhost:8080")
-	if err := http.ListenAndServe(":8080", r); err != nil {
+	// 4. Inicia o servidor na porta dinâmica (NOVO: LÊ DO AMBIENTE)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "10000" // Porta padrão para o Render Free Tier
+	}
+	
+	log.Printf("Servidor Go rodando na porta :%s. Frontend URL permitido: %s", port, frontendURL)
+	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("Erro ao iniciar servidor: %v", err)
 	}
 }
