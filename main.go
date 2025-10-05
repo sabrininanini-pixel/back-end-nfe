@@ -569,21 +569,25 @@ func main() {
 	r := chi.NewRouter()
 
 	// Middlewares
+	// ✅ CORREÇÃO: Colocamos o CORS antes do Recoverer para garantir a resposta OPTIONS
+	//              não seja interrompida sem o header correto.
+	
 	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-
-	// Configuração CORS (CORRIGIDA: Usando URL explícita)
+	
+	// Configuração CORS (PRIORIDADE ALTA)
 	// A variável frontendURL está sendo lida corretamente na função init()
 	c := cors.New(cors.Options{
-		// ✅ CORREÇÃO: Remove o wildcard "*" e usa a URL explícita.
-		// Adicione a própria URL do Render como backup para health checks e chamadas internas.
+		// Usamos as URLs explícitas para resolver o conflito de segurança com AllowCredentials: true
 		AllowedOrigins:   []string{frontendURL, "https://back-end-nfe.onrender.com"},
 		
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		AllowCredentials: true, // Agora funciona, pois as Origens são explícitas
+		AllowCredentials: true,
+		MaxAge:           300, // Tempo de cache para o preflight (em segundos)
 	})
 	r.Use(c.Handler)
+
+    r.Use(middleware.Recoverer) // Colocado depois do CORS
 
 	// 3. Rotas da Aplicação (MANTIDAS)
 	r.Post("/import-xml-data", handleImportXML)
