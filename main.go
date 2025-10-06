@@ -131,7 +131,7 @@ func init() {
 	// Lógica para obter a URL do frontend do ambiente
     frontendURL = os.Getenv("FRONTEND_URL")
     if frontendURL == "" {
-        frontendURL = "https://sabrininanini-pixel.github.io/front-end-nfe"
+        frontendURL = "https://sabrininanini-pixel.github.io/front-end-nfe/"
     }
 }
 
