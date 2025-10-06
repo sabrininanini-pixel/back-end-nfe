@@ -131,7 +131,7 @@ func init() {
 	// Lógica para obter a URL do frontend do ambiente
     frontendURL = os.Getenv("FRONTEND_URL")
     if frontendURL == "" {
-        frontendURL = "https://nfefront.netlify.app"
+        frontendURL = "https://sabrininanini-pixel.github.io/front-end-nfe"
     }
 }
 
@@ -552,8 +552,8 @@ func main() {
 	// Configuração CORS (PRIORIDADE ALTA)
 	c := cors.New(cors.Options{
 		// Usamos as URLs explícitas para resolver o conflito de segurança com AllowCredentials: true
-		AllowedOrigins:   []string{frontendURL, "https://nfefront.netlify.app",
-    "https://nfefront.netlify.app/",
+		AllowedOrigins:   []string{frontendURL, "https://sabrininanini-pixel.github.io/front-end-nfe",
+    "https://sabrininanini-pixel.github.io/front-end-nfe/",
     "https://back-end-nfe.onrender.com",},
 		
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
