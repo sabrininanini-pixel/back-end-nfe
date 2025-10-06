@@ -554,6 +554,8 @@ func main() {
 		// Usamos as URLs explícitas para resolver o conflito de segurança com AllowCredentials: true
 		AllowedOrigins:   []string{frontendURL, "https://sabrininanini-pixel.github.io/front-end-nfe",
     "https://sabrininanini-pixel.github.io/front-end-nfe/",
+	"https://sabrininanini-pixel.github.io",
+	"https://sabrininanini-pixel.github.io/",
     "https://back-end-nfe.onrender.com",},
 		
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
